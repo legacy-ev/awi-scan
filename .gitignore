@@ -1,6 +1,7 @@
 node_modules/
 coverage/
 .npm-cache/
+.validation-targets/
 *.tgz
 *.sarif
 awi-report.md
