@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Scan AI-powered GitHub Actions for prompt-to-agent injection risks.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/legacy-ev/awi-scan.git"
+  },
+  "homepage": "https://github.com/legacy-ev/awi-scan#readme",
+  "bugs": {
+    "url": "https://github.com/legacy-ev/awi-scan/issues"
+  },
   "bin": {
     "awi-scan": "./dist/cli.js"
   },
@@ -13,6 +21,9 @@
     "src",
     "action.yml",
     "README.md",
+    "CHANGELOG.md",
+    "MAINTAINER_WORKFLOWS.md",
+    "SECURITY.md",
     "LICENSE"
   ],
   "scripts": {
@@ -27,9 +38,12 @@
     "prompt-injection",
     "agentic-workflow-injection",
     "devsecops",
-    "cli"
+    "cli",
+    "sarif",
+    "codex",
+    "ai-agents"
   ],
-  "author": "",
+  "author": "legacy-ev",
   "license": "MIT",
   "engines": {
     "node": ">=20"

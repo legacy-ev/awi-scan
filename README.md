@@ -8,6 +8,15 @@ Scan AI-powered GitHub Actions for prompt-to-agent injection.
 npx awi-scan
 ```
 
+## Validation Snapshot
+
+`awi-scan` has been tested against 20 real public repos with AI-looking GitHub Actions. It found high-signal prompt-to-agent paths while exposing the noise patterns that need continued tuning. See [`VALIDATION.md`](VALIDATION.md).
+
+- 20 public repos scanned
+- 45 total findings after the first noise-reduction pass
+- Only 1 critical and 2 high findings after source-confidence tuning
+- Regression fixtures cover unsafe Claude/Gemini workflows, trusted-user gates, and actor-only status-comment noise
+
 ## Why this exists
 
 AI workflows increasingly read issues, PR bodies, comments, labels, and branch names, then ask an agent to triage, fix, summarize, label, or open follow-up changes. That creates a new shape of bug:
@@ -48,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: your-org/awi-scan@v0
+      - uses: legacy-ev/awi-scan@v0.1.0
         with:
           format: markdown
           fail-on: high
@@ -113,6 +122,20 @@ Safer rewrite: validate agent output against a strict schema, quote data, and re
 
 Open [`demo/index.html`](demo/index.html) for a tiny static explainer with vulnerable and safer workflow snippets.
 
+Example output:
+
+```text
+[HIGH] AWI001 P2A: Untrusted GitHub event text reaches an AI-agent prompt
+  source: issue or PR comment body
+  sink: - name: Ask Gemini for a command
+  fix: Do not interpolate this value directly into the prompt.
+
+[CRITICAL] AWI003 P2S: AI-agent output reaches a script or GitHub mutation step
+  source: AI-agent step output (gemini)
+  sink: script/action execution
+  fix: Validate agent output against a strict schema before shell or GitHub mutations.
+```
+
 ## Positioning
 
 - Not a generic AI security platform.
@@ -126,3 +149,14 @@ Open [`demo/index.html`](demo/index.html) for a tiny static explainer with vulne
 ## Status
 
 This is an MVP. It uses heuristic workflow scanning, so it favors clear, actionable findings over perfect YAML/program analysis. The roadmap is to add deeper YAML parsing, more agent sink signatures, config suppressions, and marketplace-ready Action publishing.
+
+## Maintainer Workflows
+
+The project is designed for real OSS maintenance loops:
+
+- Review public AI GitHub Action workflows and turn noisy findings into focused regression fixtures.
+- Triage issue reports that include workflow snippets.
+- Generate safer workflow rewrites for affected maintainers.
+- Keep SARIF, Markdown, and GitHub Action output aligned.
+
+See [`MAINTAINER_WORKFLOWS.md`](MAINTAINER_WORKFLOWS.md) for the Codex/API-credit use case.
