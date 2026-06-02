@@ -2,6 +2,7 @@ node_modules/
 coverage/
 .npm-cache/
 .validation-targets/
+.awesome-targets/
 *.tgz
 *.sarif
 awi-report.md
