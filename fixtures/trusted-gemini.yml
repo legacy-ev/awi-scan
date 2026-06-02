@@ -1,0 +1,19 @@
+name: trusted gemini command
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  agent:
+    if: contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask Gemini
+        id: gemini
+        run: |
+          gemini --prompt "Summarize this trusted request: ${{ github.event.comment.body }}"

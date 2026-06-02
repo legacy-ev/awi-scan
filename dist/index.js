@@ -10,15 +10,15 @@ const SEVERITY_ORDER = {
     critical: 4
 };
 const UNTRUSTED_SOURCES = [
-    { id: "pr-title", label: "pull request title", pattern: /github\.event\.pull_request\.title|github\.event\.pull_request\[['"]title['"]\]/i },
-    { id: "pr-body", label: "pull request body", pattern: /github\.event\.pull_request\.body|github\.event\.pull_request\[['"]body['"]\]/i },
-    { id: "pr-head-ref", label: "pull request branch name", pattern: /github\.event\.pull_request\.head\.ref|github\.head_ref/i },
-    { id: "issue-title", label: "issue title", pattern: /github\.event\.issue\.title|github\.event\.issue\[['"]title['"]\]/i },
-    { id: "issue-body", label: "issue body", pattern: /github\.event\.issue\.body|github\.event\.issue\[['"]body['"]\]/i },
-    { id: "comment-body", label: "issue or PR comment body", pattern: /github\.event\.comment\.body|github\.event\.comment\[['"]body['"]\]/i },
-    { id: "review-body", label: "review body", pattern: /github\.event\.review\.body|github\.event\.review\[['"]body['"]\]/i },
-    { id: "label-name", label: "label name", pattern: /github\.event\.label\.name/i },
-    { id: "sender-login", label: "sender username", pattern: /github\.event\.sender\.login|github\.actor/i }
+    { id: "pr-title", label: "pull request title", pattern: /github\.event\.pull_request\.title|github\.event\.pull_request\[['"]title['"]\]/i, confidence: "medium" },
+    { id: "pr-body", label: "pull request body", pattern: /github\.event\.pull_request\.body|github\.event\.pull_request\[['"]body['"]\]/i, confidence: "high" },
+    { id: "pr-head-ref", label: "pull request branch name", pattern: /github\.event\.pull_request\.head\.ref|github\.head_ref/i, confidence: "low" },
+    { id: "issue-title", label: "issue title", pattern: /github\.event\.issue\.title|github\.event\.issue\[['"]title['"]\]/i, confidence: "medium" },
+    { id: "issue-body", label: "issue body", pattern: /github\.event\.issue\.body|github\.event\.issue\[['"]body['"]\]/i, confidence: "high" },
+    { id: "comment-body", label: "issue or PR comment body", pattern: /github\.event\.comment\.body|github\.event\.comment\[['"]body['"]\]/i, confidence: "high" },
+    { id: "review-body", label: "review body", pattern: /github\.event\.review\.body|github\.event\.review\[['"]body['"]\]/i, confidence: "high" },
+    { id: "label-name", label: "label name", pattern: /github\.event\.label\.name/i, confidence: "low" },
+    { id: "sender-login", label: "sender username", pattern: /github\.event\.sender\.login|github\.actor/i, confidence: "low" }
 ];
 const AGENT_PATTERNS = [
     /anthropic|claude|claude-code/i,
@@ -32,6 +32,7 @@ const SCRIPT_SINKS = /\brun:\s|actions\/github-script|github-script|\bgh\s+(issu
 const MUTATING_GH_COMMAND = /\bgh\s+(issue|pr|api|workflow|repo|release)\b|curl\s+.*api\.github\.com/i;
 const DANGEROUS_TRIGGERS = /\bpull_request_target\b|\bissue_comment\b|\bissues:\s*[\s\S]*\bopened\b|\bpull_request_review\b/i;
 const WRITE_PERMISSIONS = /\bpermissions:\s*write-all\b|\b(contents|issues|pull-requests|actions|checks|statuses|deployments|packages|repository-projects):\s*write\b/i;
+const TRUST_GATE = /author_association.*\b(OWNER|MEMBER|COLLABORATOR)\b|\b(OWNER|MEMBER|COLLABORATOR)\b.*author_association|head\.repo\.fork\s*==\s*false|github\.event\.sender\.type\s*==\s*['"]User['"]/i;
 export function scanPath(targetPath = ".", options = {}) {
     const absoluteTarget = path.resolve(targetPath);
     const files = findWorkflowFiles(absoluteTarget);
@@ -63,14 +64,17 @@ export function analyzeWorkflow(content, context = {}) {
     const agentStepIds = agentBlocks.map(extractStepId).filter(Boolean);
     const hasDangerousTrigger = DANGEROUS_TRIGGERS.test(content);
     const hasWritePermissions = WRITE_PERMISSIONS.test(content);
+    const hasTrustedGate = TRUST_GATE.test(content);
+    const testWorkflow = isTestWorkflow(relativePath);
     for (const block of blocks) {
         const source = findUntrustedSource(block.text);
         const sourceLine = source ? findLineInBlock(block, source.pattern) : block.startLine;
-        if (source && hasAgentSink(block.text) && (PROMPT_KEYS.test(block.text) || block.text.includes("${{"))) {
+        if (source && hasAgentSink(block.text) && isPromptLikeUse(block.text, source)) {
+            const severity = downgradeForTrustGate(p2aSeverity(source, hasDangerousTrigger, hasWritePermissions), hasTrustedGate);
             findings.push(makeFinding({
                 ruleId: "AWI001",
                 kind: "P2A",
-                severity: hasDangerousTrigger || hasWritePermissions ? "high" : "medium",
+                severity,
                 title: "Untrusted GitHub event text reaches an AI-agent prompt",
                 filePath,
                 relativePath,
@@ -78,15 +82,19 @@ export function analyzeWorkflow(content, context = {}) {
                 evidence: trimEvidence(lineAt(lines, sourceLine)),
                 source: source.label,
                 sink: firstAgentSink(block.text),
-                why: "Attackers can write issues, comments, PR bodies, or branch names that are later treated as instructions by an AI agent.",
+                why: hasTrustedGate ? "This workflow appears to gate requests to trusted users, but trusted-user text can still become AI-agent instructions if it is interpolated directly." : "Attackers can write issues, comments, PR bodies, or branch names that are later treated as instructions by an AI agent.",
                 fix: "Do not interpolate this value directly into the prompt. Save it as quoted data, tell the agent it is untrusted user content, and gate privileged follow-up actions to trusted actors."
             }));
         }
         if (source && hasScriptSink(block.text)) {
+            if (source.id === "sender-login" && !MUTATING_GH_COMMAND.test(block.text))
+                continue;
+            if (source.id === "sender-login" && isStatusCommentOnly(block.text))
+                continue;
             findings.push(makeFinding({
                 ruleId: "AWI002",
                 kind: "P2S",
-                severity: MUTATING_GH_COMMAND.test(block.text) || hasWritePermissions ? "high" : "medium",
+                severity: downgradeForTrustGate(p2sSeverity(source, block.text, hasWritePermissions), hasTrustedGate),
                 title: "Untrusted GitHub event text reaches a script or GitHub mutation step",
                 filePath,
                 relativePath,
@@ -101,10 +109,12 @@ export function analyzeWorkflow(content, context = {}) {
         const agentOutputRef = findAgentOutputReference(block.text, agentStepIds);
         if (agentOutputRef && hasScriptSink(block.text)) {
             const line = findLineInBlock(block, agentOutputRef.pattern);
+            if (isConditionOnlyReference(lineAt(lines, line)))
+                continue;
             findings.push(makeFinding({
                 ruleId: "AWI003",
                 kind: "P2S",
-                severity: MUTATING_GH_COMMAND.test(block.text) || hasWritePermissions ? "critical" : "high",
+                severity: testWorkflow ? "medium" : MUTATING_GH_COMMAND.test(block.text) || hasWritePermissions ? "critical" : "high",
                 title: "AI-agent output reaches a script or GitHub mutation step",
                 filePath,
                 relativePath,
@@ -171,7 +181,7 @@ export function toSarif(result) {
                 tool: {
                     driver: {
                         name: "awi-scan",
-                        informationUri: "https://github.com/your-org/awi-scan",
+                        informationUri: "https://github.com/legacy-ev/awi-scan",
                         version: VERSION,
                         rules: [...rules.values()]
                     }
@@ -264,6 +274,45 @@ function hasScriptSink(text) {
 }
 function findUntrustedSource(text) {
     return UNTRUSTED_SOURCES.find((source) => source.pattern.test(text));
+}
+function isPromptLikeUse(text, source) {
+    if (source.id === "sender-login")
+        return false;
+    if (source.confidence === "low" && !PROMPT_KEYS.test(text))
+        return false;
+    return PROMPT_KEYS.test(text) || text.includes("${{");
+}
+function p2aSeverity(source, hasDangerousTrigger, hasWritePermissions) {
+    if (source.confidence === "low")
+        return "low";
+    if (source.confidence === "medium")
+        return hasDangerousTrigger || hasWritePermissions ? "medium" : "low";
+    return hasDangerousTrigger || hasWritePermissions ? "high" : "medium";
+}
+function p2sSeverity(source, text, hasWritePermissions) {
+    if (source.confidence === "low")
+        return MUTATING_GH_COMMAND.test(text) || hasWritePermissions ? "medium" : "low";
+    return MUTATING_GH_COMMAND.test(text) || hasWritePermissions ? "high" : "medium";
+}
+function downgradeForTrustGate(severity, hasTrustedGate) {
+    if (!hasTrustedGate)
+        return severity;
+    if (severity === "critical")
+        return "high";
+    if (severity === "high")
+        return "medium";
+    if (severity === "medium")
+        return "low";
+    return severity;
+}
+function isConditionOnlyReference(line) {
+    return /^\s*if:\s/.test(line);
+}
+function isStatusCommentOnly(text) {
+    return /\bgh\s+issue\s+comment\b[\s\S]*github\.actor/i.test(text) && !/\b(eval|bash|sh|pwsh|powershell|gh\s+(api|pr|repo|workflow|release))\b/i.test(text);
+}
+function isTestWorkflow(relativePath) {
+    return /(^|[\\/])test[-_].*\.ya?ml$|(^|[\\/]).*[-_]test(s)?\.ya?ml$/i.test(relativePath);
 }
 function findAgentOutputReference(text, agentStepIds) {
     for (const stepId of agentStepIds) {

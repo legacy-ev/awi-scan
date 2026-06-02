@@ -1,0 +1,19 @@
+name: status comment should not look like P2A
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+jobs:
+  reply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment status
+        run: |
+          gh issue comment "$NUMBER" --body "Hi @${{ github.actor }}, the bot is working."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMBER: ${{ github.event.issue.number }}

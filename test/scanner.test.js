@@ -26,6 +26,22 @@ test("does not flag the safe fixture", () => {
   assert.equal(findings.length, 0);
 });
 
+test("does not treat actor-only status comments as prompt injection", () => {
+  const findings = scanFile(fixture("noisy-status-comment.yml"), { rootPath: root });
+  assert.equal(findings.some((finding) => finding.ruleId === "AWI001"), false);
+  assert.equal(findings.length, 0);
+});
+
+test("downgrades trusted-user gated prompt paths", () => {
+  const findings = scanFile(fixture("trusted-gemini.yml"), { rootPath: root });
+  const p2a = findings.find((finding) => finding.ruleId === "AWI001");
+  const p2s = findings.find((finding) => finding.ruleId === "AWI002");
+  assert.ok(p2a);
+  assert.equal(p2a.severity, "medium");
+  assert.ok(p2s);
+  assert.equal(p2s.severity, "medium");
+});
+
 test("formats markdown and SARIF reports", () => {
   const result = scanPath(path.join(root, "fixtures"), { rootPath: root });
   const markdown = formatReport(result, "markdown");

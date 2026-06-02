@@ -83,3 +83,23 @@ Useful for: security researchers, maintainers auditing AI workflows, and demo-dr
 Not ready for: automatically filing issues against maintainers without manual review.
 
 Best next milestone: implement the noise reductions above, rerun this same 20-repo set, and aim for fewer than 15 total findings while preserving the clearest P2A cases.
+
+## 2026-06-02: Quick Noise-Reduction Pass
+
+Changes made after the first validation scan:
+
+- Added source confidence levels so comment/body text is higher signal than actor, label, or branch names.
+- Suppressed actor-only status-comment P2A noise.
+- Downgraded trusted-user gated prompt paths that check `author_association`.
+- Downgraded agent-output P2S findings in test workflow files.
+- Ignored condition-only agent output references such as `if: steps.agent.outputs.skip`.
+
+Rerun result on the same 20 repos:
+
+- Total findings changed from 49 to 45.
+- High findings changed from 27 to 2.
+- Critical findings changed from 2 to 1.
+- Low-confidence findings are now visibly marked as low/medium instead of high.
+- The clearest P2A case in `ca-dp/code-butler` is still detected as high.
+
+This is a better default for maintainers: it still points to the important AI prompt paths, but it is less likely to panic users with generic workflow plumbing.
