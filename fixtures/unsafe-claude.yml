@@ -1,0 +1,26 @@
+name: unsafe claude triage
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - id: triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            Triage this issue and decide the labels:
+            ${{ github.event.issue.body }}
+
+      - name: Apply labels
+        run: gh issue edit "$NUMBER" --add-label "${{ steps.triage.outputs.labels }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMBER: ${{ github.event.issue.number }}

@@ -1,0 +1,26 @@
+name: awi-scan
+description: Scan AI-powered GitHub Actions for prompt-to-agent injection risks.
+author: awi-scan
+inputs:
+  path:
+    description: Repository path or workflow directory to scan.
+    required: false
+    default: "."
+  format:
+    description: Output format: terminal, markdown, json, or sarif.
+    required: false
+    default: "markdown"
+  output:
+    description: Optional file path for the report.
+    required: false
+    default: ""
+  fail-on:
+    description: Lowest severity that fails the workflow: critical, high, medium, low, or none.
+    required: false
+    default: "high"
+runs:
+  using: node20
+  main: dist/action.js
+branding:
+  icon: shield
+  color: red

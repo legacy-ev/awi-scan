@@ -1,0 +1,41 @@
+{
+  "name": "awi-scan",
+  "version": "0.1.0",
+  "description": "Scan AI-powered GitHub Actions for prompt-to-agent injection risks.",
+  "type": "module",
+  "bin": {
+    "awi-scan": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "files": [
+    "dist",
+    "src",
+    "action.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "scan": "node ./dist/cli.js",
+    "test": "node --test",
+    "demo": "node ./dist/cli.js ./fixtures --format markdown"
+  },
+  "keywords": [
+    "github-actions",
+    "ai-security",
+    "prompt-injection",
+    "agentic-workflow-injection",
+    "devsecops",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

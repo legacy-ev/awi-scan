@@ -1,0 +1,20 @@
+name: unsafe gemini comment runner
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: write-all
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask Gemini for a command
+        id: gemini
+        run: |
+          gemini --prompt "Convert this request to a command: ${{ github.event.comment.body }}" > command.txt
+          echo "command=$(cat command.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Run command
+        run: ${{ steps.gemini.outputs.command }}

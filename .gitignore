@@ -1,0 +1,6 @@
+node_modules/
+coverage/
+.npm-cache/
+*.tgz
+*.sarif
+awi-report.md
